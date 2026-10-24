@@ -1,0 +1,20 @@
+{
+  "name": "Workflow Telegram Chatbot - Temperatura",
+  "nodes": [
+    {"parameters": {"updates": ["message"]}, "name": "Telegram Trigger", "type": "n8n-nodes-base.telegramTrigger", "typeVersion": 1.5, "position": [0, 96]},
+    {"parameters": {"mode": "manual", "assignments": {"assignments": [{"id": "queue", "name": "queue", "type": "string", "value": "={{ ($json.message.text || '').trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/\\s*,\\s*/g, ',').replace(/\\s+/g, ' ') }}"}]}, "includeOtherFields": true}, "name": "Formatar entrada (queue)", "type": "n8n-nodes-base.set", "typeVersion": 3.5, "position": [224, 96]},
+    {"parameters": {"method": "GET", "url": "https://api.openweathermap.org/data/2.5/weather", "sendQuery": true, "specifyQuery": "keypair", "queryParameters": {"parameters": [{"name": "q", "value": "={{ $json.queue }}"}, {"name": "units", "value": "metric"}, {"name": "lang", "value": "pt_br"}, {"name": "appid", "value": "={{ $env.OPENWEATHER_API_KEY }}"}]}, "options": {"response": {"response": {"fullResponse": true, "neverError": true, "responseFormat": "json"}}, "timeout": 10000}}, "name": "Consultar OpenWeather", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.5, "position": [448, 96], "onError": "continueRegularOutput"},
+    {"parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2}, "combinator": "and", "conditions": [{"id": "status-ok", "leftValue": "={{ $json.statusCode ?? 0 }}", "rightValue": 200, "operator": {"type": "number", "operation": "equals"}}, {"id": "has-temp", "leftValue": "={{ typeof $json.body?.main?.temp }}", "rightValue": "number", "operator": {"type": "string", "operation": "equals"}}]}}, "name": "Resposta valida?", "type": "n8n-nodes-base.if", "typeVersion": 2.4, "position": [672, 96]},
+    {"parameters": {"mode": "manual", "assignments": {"assignments": [{"id": "cidade", "name": "cidade", "type": "string", "value": "={{ $json.body.name }}"}, {"id": "temperatura", "name": "temperatura", "type": "number", "value": "={{ Math.round($json.body.main.temp) }}"}, {"id": "mensagem", "name": "mensagem", "type": "string", "value": "=🌤️ A temperatura em {{ $json.body.name }} é de {{ Math.round($json.body.main.temp) }}°C."}]}, "includeOtherFields": false}, "name": "Formatar resposta", "type": "n8n-nodes-base.set", "typeVersion": 3.5, "position": [896, 0]},
+    {"parameters": {"resource": "message", "operation": "sendMessage", "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}", "text": "={{ $json.mensagem }}", "additionalFields": {"appendAttribution": false}}, "name": "Enviar temperatura", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [1120, 0]},
+    {"parameters": {"resource": "message", "operation": "sendMessage", "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}", "text": "❌ Cidade não encontrada. Use o formato Cidade,UF,BR (ex.: São Paulo,SP,BR).", "additionalFields": {"appendAttribution": false}}, "name": "Enviar erro", "type": "n8n-nodes-base.telegram", "typeVersion": 1.2, "position": [896, 192]}
+  ],
+  "connections": {
+    "Telegram Trigger": {"main": [[{"node": "Formatar entrada (queue)", "type": "main", "index": 0}]]},
+    "Formatar entrada (queue)": {"main": [[{"node": "Consultar OpenWeather", "type": "main", "index": 0}]]},
+    "Consultar OpenWeather": {"main": [[{"node": "Resposta valida?", "type": "main", "index": 0}]]},
+    "Resposta valida?": {"main": [[{"node": "Formatar resposta", "type": "main", "index": 0}], [{"node": "Enviar erro", "type": "main", "index": 0}]]},
+    "Formatar resposta": {"main": [[{"node": "Enviar temperatura", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"}
+}
